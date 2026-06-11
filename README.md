@@ -1,5 +1,10 @@
 # Bonner Hour Dashboard
 
+> [!IMPORTANT]
+> **This repository has moved to [Daksh-T/bonner-dashboard](https://github.com/Daksh-T/bonner-dashboard).**
+> This copy is archived so existing links and the [live demo](https://bonner-dashboard-demo.onrender.com)
+> keep working, but all development, issues, and releases happen in the new repo.
+
 Checkpoint dashboard for Bonner-style service programs: hour progress, risk
 status, partner activity, reflection completion, exemptions, exports, and
 Slack-ready outreach messages. Runs entirely on your **GivePulse CSV exports**
