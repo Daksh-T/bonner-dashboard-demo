@@ -78,6 +78,7 @@ export interface AppConfig {
   grad_year_field: string;
   class_field: string;
   manual_seniors: string[];
+  manual_classes: Record<string, string>;
   data_source: "csv";
   roster_order: string[];
   name_mappings: Record<string, string>;

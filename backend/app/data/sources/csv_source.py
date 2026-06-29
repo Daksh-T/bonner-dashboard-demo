@@ -1,7 +1,8 @@
 """CSV data source: reads the latest ``users-*.csv`` / ``impacts-*.csv`` exports.
 
-Searches the upload directory first (files uploaded via Settings) then the bundled
-``csv/`` directory, picking the most recently modified of each kind. This keeps the
+Files uploaded via Settings always take precedence; the bundled demo ``csv/``
+directory is only a fallback when no upload of that kind exists. Within a
+directory the most recently modified file of each kind wins. This keeps the
 original demo/offline workflow working with zero configuration.
 """
 
@@ -19,12 +20,20 @@ def _search_dirs() -> list[Path]:
     return dirs or [CSV_DIR]
 
 
+def _candidates(pattern: str) -> list[Path]:
+    # Uploads must beat the bundled demo CSVs outright: installing or updating
+    # the app rewrites the bundle with fresh mtimes, so a newest-mtime race
+    # across both dirs would flip the dashboard back to demo data.
+    if UPLOAD_DIR.exists():
+        uploaded = list(UPLOAD_DIR.glob(pattern))
+        if uploaded:
+            return uploaded
+    return list(CSV_DIR.glob(pattern)) if CSV_DIR.exists() else []
+
+
 def discover_latest_exports() -> tuple[Path, Path]:
-    users_files: list[Path] = []
-    impacts_files: list[Path] = []
-    for base in _search_dirs():
-        users_files += list(base.glob("users-*.csv"))
-        impacts_files += list(base.glob("impacts-*.csv"))
+    users_files = _candidates("users-*.csv")
+    impacts_files = _candidates("impacts-*.csv")
     if not users_files or not impacts_files:
         missing = []
         if not users_files:

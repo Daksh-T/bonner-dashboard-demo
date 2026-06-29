@@ -12,6 +12,7 @@ setup between machines.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal, Optional
@@ -98,6 +99,11 @@ class AppConfig(BaseModel):
     # no graduation year / class field: these members are forced into the senior
     # requirement cohort regardless of grad year.
     manual_seniors: list[str] = Field(default_factory=list)
+
+    # Manual class overrides (lowercase email -> class label, e.g. "Freshman").
+    # Used when the data has no usable graduation year / class field: the label
+    # replaces the auto-detected class and also drives cohort label matching.
+    manual_classes: dict[str, str] = Field(default_factory=dict)
 
     data_source: Literal["csv"] = "csv"
 
@@ -206,6 +212,63 @@ DEFAULT_MESSAGE_TEMPLATES = {
 }
 
 
+TEMPLATE_VARIABLES = [
+    {
+        "token": "hours",
+        "label": "Hours",
+        "description": "Member's logged hours",
+        "example": "58.5",
+    },
+    {
+        "token": "goal",
+        "label": "Goal",
+        "description": "Checkpoint goal hours",
+        "example": "69",
+    },
+    {
+        "token": "run_date",
+        "label": "Run date",
+        "description": "Checkpoint date",
+        "example": "March 20, 2026",
+    },
+    {
+        "token": "ordinal",
+        "label": "Ordinal",
+        "description": "Checkpoint ordinal like \"2nd\"",
+        "example": "2nd",
+    },
+    {
+        "token": "ordinal_word",
+        "label": "Ordinal (word)",
+        "description": "Checkpoint ordinal as a word",
+        "example": "second",
+    },
+    {
+        "token": "checkpoint_number",
+        "label": "Checkpoint number",
+        "description": "Checkpoint number",
+        "example": "2",
+    },
+    {
+        "token": "checkpoint_name",
+        "label": "Checkpoint name",
+        "description": "Configured checkpoint name",
+        "example": "CP2",
+    },
+]
+
+
+def render_template(template: str, values: dict[str, str]) -> str:
+    """Substitute ``{token}`` placeholders with ``values``, leaving unknown
+    tokens and any stray braces untouched so user-edited templates never raise."""
+
+    def _sub(match: re.Match[str]) -> str:
+        token = match.group(1)
+        return values[token] if token in values else match.group(0)
+
+    return re.sub(r"\{(\w+)\}", _sub, template)
+
+
 def default_config() -> AppConfig:
     return AppConfig(
         program_name="Bonner Program",
@@ -276,6 +339,18 @@ def _load_from_db() -> AppConfig:
 # Runtime checkpoint resolution (replaces the old config.Checkpoint helpers)
 # --------------------------------------------------------------------------- #
 _ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"]
+_ORDINAL_WORDS = [
+    "first",
+    "second",
+    "third",
+    "fourth",
+    "fifth",
+    "sixth",
+    "seventh",
+    "eighth",
+    "ninth",
+    "tenth",
+]
 
 
 @dataclass(frozen=True)
@@ -354,3 +429,19 @@ def checkpoint_ordinal(name: str, config: AppConfig | None = None) -> str:
         if cp.name == name:
             return _ORDINALS[idx] if idx < len(_ORDINALS) else f"{idx + 1}th"
     return "current pace"
+
+
+def checkpoint_ordinal_word(name: str, config: AppConfig | None = None) -> str:
+    config = config or get_config()
+    for idx, cp in enumerate(config.sorted_checkpoints()):
+        if cp.name == name:
+            return _ORDINAL_WORDS[idx] if idx < len(_ORDINAL_WORDS) else f"{idx + 1}th"
+    return "current"
+
+
+def checkpoint_number(name: str, config: AppConfig | None = None) -> str:
+    config = config or get_config()
+    for idx, cp in enumerate(config.sorted_checkpoints()):
+        if cp.name == name:
+            return str(idx + 1)
+    return ""

@@ -9,9 +9,12 @@ from .. import db
 from ..settings import (
     AppConfig,
     RuntimeCheckpoint,
+    checkpoint_number,
     checkpoint_ordinal,
+    checkpoint_ordinal_word,
     default_checkpoint_name,
     get_config,
+    render_template,
     resolve_checkpoint,
 )
 from .loader import STATE
@@ -66,6 +69,13 @@ def normalize_users(df: pd.DataFrame, config: AppConfig) -> pd.DataFrame:
         return "Other"
 
     df["class_label"] = [resolve_label(y, f) for y, f in zip(df["grad_year"], class_field_vals)]
+    # Manual class overrides win over auto-detection (and, below, feed cohort
+    # label matching) so a roster with no usable grad year can still be classed.
+    manual_classes = {str(e).lower().strip(): str(l).strip() for e, l in config.manual_classes.items() if str(l).strip()}
+    if manual_classes:
+        df["class_label"] = [
+            manual_classes.get(email, label) for email, label in zip(df["email"], df["class_label"])
+        ]
     df["class_sort"] = df["class_label"].map(lambda label: order_by_label.get(label, other_sort))
     cohorts = [config.cohort_for(int(y), cl) for y, cl in zip(df["grad_year"], df["class_label"])]
     # Manual senior overrides: force listed emails into the senior cohort when the
@@ -154,11 +164,17 @@ def build_checkpoint_message(status: str, hours: float, checkpoint: RuntimeCheck
     template = config.message_templates.get(status, "")
     if not template:
         return ""
-    return template.format(
-        ordinal=checkpoint_ordinal(checkpoint.name, config),
-        run_date=checkpoint.date.strftime("%B %-d, %Y"),
-        goal=format_hours(goal_hours),
-        hours=format_hours(hours),
+    return render_template(
+        template,
+        {
+            "ordinal": checkpoint_ordinal(checkpoint.name, config),
+            "ordinal_word": checkpoint_ordinal_word(checkpoint.name, config),
+            "checkpoint_number": checkpoint_number(checkpoint.name, config),
+            "checkpoint_name": checkpoint.name,
+            "run_date": checkpoint.date.strftime("%B %-d, %Y"),
+            "goal": format_hours(goal_hours),
+            "hours": format_hours(hours),
+        },
     )
 
 

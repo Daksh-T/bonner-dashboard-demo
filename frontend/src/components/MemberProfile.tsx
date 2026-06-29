@@ -33,6 +33,7 @@ export function MemberProfile({
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      e.preventDefault();
       if (selectedImpact) {
         setSelectedImpact(null);
         return;

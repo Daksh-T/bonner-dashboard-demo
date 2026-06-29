@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { api } from "../api/client";
 import { applyTheme } from "../lib/theme";
+import { exportSettingsFile } from "../lib/settingsFile";
 import type { AppConfig, Cohort, DataStatus } from "../types";
 
 const ACCENT = "#3498db";
@@ -27,7 +28,7 @@ export function Onboarding({
 
   const patch = (p: Partial<AppConfig>) => setConfig((c) => (c ? { ...c, ...p } : c));
 
-  const STEPS = ["Welcome", "Export & upload", "Program", "Checkpoints & cohorts", "Confirm cohorts", "Reflections", "Appearance", "Finish"];
+  const STEPS = ["Welcome", "Export & upload", "Program", "Checkpoints & cohorts", "Confirm cohorts", "Reflections", "Exemptions", "Appearance", "Finish"];
   const last = STEPS.length - 1;
 
   const next = () => setStep((s) => Math.min(last, s + 1));
@@ -56,8 +57,6 @@ export function Onboarding({
     try {
       const res = await api.updateConfig(config);
       applyTheme(config.theme === "light" ? "light" : "dark");
-      // Offer a portable settings file.
-      downloadJson(`${(config.program_name || "bonner").toLowerCase().replace(/\s+/g, "-")}-settings.json`, res.config);
       onComplete(res.data);
     } finally {
       setBusy(null);
@@ -94,8 +93,9 @@ export function Onboarding({
           {step === 3 && <CheckpointsStep config={config} patch={patch} />}
           {step === 4 && <ConfirmCohorts members={members} config={config} patch={patch} busy={busy === "confirm"} reload={enterConfirm} />}
           {step === 5 && <ReflectionsStep config={config} patch={patch} />}
-          {step === 6 && <AppearanceStep config={config} patch={patch} />}
-          {step === 7 && <FinishStep config={config} />}
+          {step === 6 && <ExemptionsStep />}
+          {step === 7 && <AppearanceStep config={config} patch={patch} />}
+          {step === 8 && <FinishStep config={config} />}
         </div>
 
         {/* footer */}
@@ -127,6 +127,13 @@ function H({ children }: { children: React.ReactNode }) {
 }
 function P({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 text-[13px] leading-relaxed" style={{ color: "var(--text-2)" }}>{children}</div>;
+}
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: "#3498db0d", border: "1px solid #3498db33", color: "var(--text-2)" }}>
+      {children}
+    </div>
+  );
 }
 
 function Welcome() {
@@ -311,6 +318,12 @@ function CheckpointsStep({ config, patch }: { config: AppConfig; patch: (p: Part
         </table>
       </div>
       <Ghost onClick={addCp}><Plus size={13} /> Add checkpoint</Ghost>
+
+      <Hint>
+        There's more in <strong>Settings → Checkpoints &amp; cohorts</strong>: map graduation years to display classes
+        (class labels), choose which CSV columns hold the graduation year / class, and — if auto-detection fails for
+        your export — pick seniors or assign classes (Freshman, Sophomore, …) to members by hand.
+      </Hint>
     </div>
   );
 }
@@ -365,12 +378,30 @@ function ConfirmCohorts({
           </div>
         ))}
       </div>
+
+      <Hint>
+        Still wrong after adjusting? In <strong>Settings → Checkpoints &amp; cohorts</strong> you can mark seniors
+        manually and assign any member a class (Freshman, Sophomore, …) by hand — handy when your export has no usable
+        graduation year.
+      </Hint>
     </div>
   );
 }
 
 function ReflectionsStep({ config, patch }: { config: AppConfig; patch: (p: Partial<AppConfig>) => void }) {
   const r = config.reflection;
+  const [showPicker, setShowPicker] = useState(false);
+  const [columns, setColumns] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (showPicker && columns === null) {
+      api.getDataColumns().then((c) => setColumns(c.impacts ?? [])).catch(() => setColumns([]));
+    }
+  }, [showPicker, columns]);
+  const toggleField = (col: string) => {
+    const set = new Set(r.fields);
+    set.has(col) ? set.delete(col) : set.add(col);
+    patch({ reflection: { ...r, fields: Array.from(set) } });
+  };
   return (
     <div>
       <H>Reflections</H>
@@ -380,6 +411,36 @@ function ReflectionsStep({ config, patch }: { config: AppConfig; patch: (p: Part
         <Field label="Reflection fields (one per line)">
           <textarea rows={4} style={{ width: "100%" }} value={r.fields.join("\n")}
             onChange={(e) => patch({ reflection: { ...r, fields: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) } })} placeholder="Review/Reflection" />
+          <Ghost onClick={() => setShowPicker((v) => !v)}>{showPicker ? "Hide CSV fields" : "Pick fields from your CSV…"}</Ghost>
+          {showPicker && (
+            <div className="mt-2 rounded-lg p-3" style={card}>
+              {columns === null ? (
+                <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>Loading columns…</div>
+              ) : columns.length === 0 ? (
+                <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>No impact columns found — upload an impacts CSV first (step 2).</div>
+              ) : (
+                <>
+                  <div className="mb-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Tap a column from your impacts export to toggle it as a reflection field.</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {columns.map((col) => {
+                      const on = r.fields.includes(col);
+                      return (
+                        <button key={col} type="button" onClick={() => toggleField(col)} aria-pressed={on}
+                          className="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors"
+                          style={{
+                            background: on ? "#3498db22" : "var(--surface)",
+                            border: on ? "1px solid #3498db66" : "1px solid var(--border-3)",
+                            color: on ? "#7cc0e8" : "var(--text-2)",
+                          }}>
+                          {on ? "✓ " : ""}{col}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </Field>
         <div className="space-y-3">
           <Field label="Values counted as empty (comma-separated)">
@@ -419,21 +480,63 @@ function AppearanceStep({ config, patch }: { config: AppConfig; patch: (p: Parti
   );
 }
 
+function ExemptionsStep() {
+  return (
+    <div>
+      <H>Exemptions</H>
+      <P>
+        <p>Some members shouldn't be held to the hour requirements — study abroad, medical leave, special arrangements.
+          Add them as <strong>exemptions</strong> and they're excluded from risk statuses, critical lists, and Slack
+          check-in queues, with the reason kept on record.</p>
+        <p className="mt-3">You'll find this under <strong>Settings → Exemptions</strong> once members are loaded:
+          pick the member, write a reason, done. You can remove an exemption at any time.</p>
+      </P>
+    </div>
+  );
+}
+
 function FinishStep({ config }: { config: AppConfig }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  const downloadSettings = async () => {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      // Persist first so the exported file matches what the walkthrough set up.
+      const res = await api.updateConfig(config);
+      const path = await exportSettingsFile(res.config);
+      setExportMsg(path ? `Saved to ${path}` : "Downloaded ✓");
+    } catch (e) {
+      setExportMsg(`Export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <H>You're all set 🎉</H>
       <P>
-        <p>Clicking <strong>Finish & save</strong> stores your configuration locally and downloads a portable
-          <strong> settings.json</strong>. Next time (or on another machine) you can import it from Settings → Appearance
-          to restore everything instantly.</p>
+        <p>Clicking <strong>Finish & save</strong> stores your configuration locally.</p>
         <ul className="mt-3 space-y-1 text-[12px]" style={{ color: "var(--text-3)" }}>
           <li>• Program: <span style={{ color: "var(--text-2)" }}>{config.program_name}</span></li>
           <li>• Checkpoints: <span style={{ color: "var(--text-2)" }}>{config.checkpoints.length}</span></li>
           <li>• Cohorts: <span style={{ color: "var(--text-2)" }}>{config.cohorts.map((c) => c.label).join(", ")}</span></li>
           <li>• Theme: <span style={{ color: "var(--text-2)" }}>{config.theme}</span></li>
         </ul>
+        <p className="mt-4">Want a backup? Your whole setup fits in one portable <strong>settings.json</strong>. Download
+          it below, and restore it any time — on this or another machine — via <strong>Settings → Appearance → Import
+          settings.json</strong>. You can re-export it from there whenever, too.</p>
       </P>
+      <div className="mt-3 flex items-center gap-3">
+        <Ghost onClick={downloadSettings}>
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download settings.json
+        </Ghost>
+        {exportMsg && (
+          <span className="text-[12px]" style={{ color: exportMsg.startsWith("Export failed") ? "#e74c3c" : "#27ae60" }}>{exportMsg}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -452,11 +555,3 @@ function Row({ k, v }: { k: string; v: number }) {
   return <div className="flex justify-between text-[12px]"><span style={{ color: "var(--text-2)" }}>{k}</span><span className="tabular-nums font-medium" style={{ color: "var(--text)" }}>{v}</span></div>;
 }
 function Empty() { return <div className="text-[12px]" style={{ color: "var(--text-muted)" }}>No members yet — upload CSVs first.</div>; }
-
-export function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
