@@ -31,7 +31,7 @@ const NAV_TITLES: Record<Page, string> = {
 type LoadState = "idle" | "loading" | "loaded" | "error";
 
 const PROJECT_REPO_URL = "https://github.com/Daksh-T/bonner-dashboard";
-const DEMO_POPUP_DISMISSED_KEY = "bonner-demo-popup-dismissed";
+const PROJECT_RELEASES_URL = "https://github.com/Daksh-T/bonner-dashboard/releases";
 
 export default function App() {
   const [page, setPage]             = useState<Page>("overview");
@@ -88,9 +88,7 @@ export default function App() {
   useEffect(() => {
     if (!demoMode) return;
     setShowWalkthrough(false);
-    let dismissed = false;
-    try { dismissed = localStorage.getItem(DEMO_POPUP_DISMISSED_KEY) === "1"; } catch { /* private mode */ }
-    if (!dismissed) setShowDemoPopup(true);
+    setShowDemoPopup(true);
   }, [demoMode]);
 
   const closeWalkthrough = useCallback(() => {
@@ -176,6 +174,8 @@ export default function App() {
           />
         )}
 
+        {demoMode && <DemoBanner />}
+
         <div className="flex-1 overflow-y-auto">
           <div
             key={page === "settings" ? "settings" : `${page}:${dataStatus?.last_loaded_at ?? ""}`}
@@ -205,7 +205,6 @@ export default function App() {
         <DemoPopup
           onClose={() => {
             setShowDemoPopup(false);
-            try { localStorage.setItem(DEMO_POPUP_DISMISSED_KEY, "1"); } catch { /* private mode */ }
           }}
         />
       )}
@@ -221,31 +220,63 @@ export default function App() {
   );
 }
 
+function DemoBanner() {
+  return (
+    <div
+      className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-2 text-center text-[12px] font-medium md:px-6"
+      style={{ background: "#3498db18", borderBottom: "1px solid #3498db33", color: "var(--text-bright)" }}
+    >
+      <span>This is a demo.</span>
+      <span style={{ color: "var(--text-2)" }}>To use with your data, go to BonnerDashboard</span>
+      <a
+        href={PROJECT_RELEASES_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 whitespace-nowrap underline-offset-4 hover:underline"
+        style={{ color: "#5dade2" }}
+      >
+        releases <ExternalLink size={12} />
+      </a>
+    </div>
+  );
+}
+
 function DemoPopup({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "var(--overlay)" }}>
-      <div className="w-full max-w-md rounded-2xl p-6" style={{ background: "var(--surface)", border: "1px solid var(--border-3)" }}>
+      <div className="w-full max-w-lg rounded-2xl p-6 shadow-2xl" style={{ background: "var(--surface)", border: "1px solid #3498db66" }}>
         <div className="flex items-start justify-between">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "#3498db14", border: "1px solid #3498db33" }}>
-            <BarChart3 size={20} style={{ color: "#3498db" }} />
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: "#3498db1f", border: "1px solid #3498db55" }}>
+            <BarChart3 size={22} style={{ color: "#3498db" }} />
           </span>
           <button onClick={onClose} aria-label="Dismiss" className="rounded-md p-1" style={{ color: "var(--text-muted)" }}><X size={16} /></button>
         </div>
-        <h2 className="mt-4 text-[17px] font-semibold" style={{ color: "var(--text)" }}>You're viewing a live demo</h2>
-        <p className="mt-2 text-[13px] leading-relaxed" style={{ color: "var(--text-2)" }}>
-          Everything here runs on <strong>fabricated demo data</strong> — explore freely. To run the dashboard on your own
-          program's GivePulse exports, grab the app from GitHub: it runs locally on your machine, with a guided setup and
-          downloadable desktop builds.
+        <h2 className="mt-5 text-[21px] font-semibold" style={{ color: "var(--text)" }}>You're viewing a demo</h2>
+        <p className="mt-2 text-[14px] leading-relaxed" style={{ color: "var(--text-2)" }}>
+          Everything here runs on <strong>fabricated demo data</strong>. Explore freely, but do not upload real program data
+          to this hosted demo.
         </p>
-        <div className="mt-5 flex items-center gap-3">
+        <p className="mt-3 text-[14px] leading-relaxed" style={{ color: "var(--text-2)" }}>
+          To use BonnerDashboard with your own GivePulse exports, download a desktop release and run it locally.
+        </p>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <a
-            href={PROJECT_REPO_URL}
+            href={PROJECT_RELEASES_URL}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-medium"
             style={{ background: "#3498db", color: "#fff" }}
           >
-            Get the app on GitHub <ExternalLink size={13} />
+            Open releases <ExternalLink size={13} />
+          </a>
+          <a
+            href={PROJECT_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-medium"
+            style={{ background: "var(--surface-3)", border: "1px solid var(--border-3)", color: "var(--text-2)" }}
+          >
+            View GitHub <ExternalLink size={13} />
           </a>
           <button onClick={onClose} className="rounded-xl px-4 py-2 text-[12px] font-medium" style={{ background: "var(--surface-3)", border: "1px solid var(--border-3)", color: "var(--text-2)" }}>
             Keep exploring

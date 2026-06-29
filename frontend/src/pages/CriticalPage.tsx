@@ -36,7 +36,8 @@ export function CriticalPage({
   dataStatus: DataStatus | null;
 }) {
   const activeCheckpoint = dataStatus?.active_checkpoint ?? "CP3";
-  const critical = useAsyncData(() => api.getCritical(), [activeCheckpoint], true);
+  const dataLoaded = Boolean(dataStatus?.last_loaded_at);
+  const critical = useAsyncData(() => api.getCritical(), [activeCheckpoint, dataLoaded], dataLoaded);
   const [localState, setLocalState] = useState<Map<string, { sent: boolean; notes: string }>>(new Map());
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [notesOpen, setNotesOpen] = useState<Set<string>>(new Set());
@@ -135,6 +136,12 @@ export function CriticalPage({
           </div>
         )}
       </div>
+
+      {!dataLoaded && (
+        <div className="rounded-xl p-6 text-[13px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+          Loading dashboard data before checking critical members...
+        </div>
+      )}
 
       {critical.loading && <CriticalSkeleton />}
 
